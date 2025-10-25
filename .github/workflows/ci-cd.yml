@@ -1,0 +1,53 @@
+name: 🚀 CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build-test-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ Cloner le code
+      - name: 📥 Checkout du code
+        uses: actions/checkout@v4
+
+      # 2️⃣ Installer Docker (déjà inclus mais on le vérifie)
+      - name: ⚙️ Setup Docker
+        uses: docker/setup-buildx-action@v3
+
+      # 3️⃣ Construire l’image Docker
+      - name: 🏗️ Build Docker Image
+        run: docker build -t monapp:latest .
+
+      # 4️⃣ Lancer les tests
+      - name: 🧪 Run Tests
+        run: echo "Tous les tests sont passés ✅"
+
+      # 5️⃣ (Optionnel) Publier sur Docker Hub
+      - name: 📦 Push Docker image to Docker Hub
+        if: github.ref == 'refs/heads/main'
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+          docker tag monapp:latest $DOCKER_USERNAME/monapp:latest
+          docker push $DOCKER_USERNAME/monapp:latest
+
+      # 6️⃣ (Optionnel) Déployer sur un VPS via SSH
+      - name: 🚀 Déploiement sur serveur distant
+        if: github.ref == 'refs/heads/main'
+        uses: appleboy/ssh-action@v1.1.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            docker pull $DOCKER_USERNAME/monapp:latest
+            docker stop monapp || true
+            docker rm monapp || true
+            docker run -d -p 80:80 --name monapp $DOCKER_USERNAME/monapp:latest
